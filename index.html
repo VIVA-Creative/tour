@@ -3,16 +3,223 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Jovi Greene — Tour</title>
-<meta name="theme-color" content="#141619">
-<meta name="robots" content="noindex">
+<title>Jovi Greene Tour</title>
+<meta name="theme-color" content="#f4f2ee">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Jovi Tour">
 <style>
-  html, body { margin:0; padding:0; height:100%; background:#141619; }
-  iframe { position:fixed; inset:0; width:100%; height:100%; border:0; }
+  body { margin:0; font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background:#f4f2ee; color:#1f2328; }
+  #gate { text-align:center; margin-top:64px; padding:0 20px; }
+  #gate h1 { font-size:22px; margin:16px 0 4px; }
+  #gate .sub { color:#6b7280; font-size:13.5px; margin-bottom:18px; }
+  #pin { font-size:22px; text-align:center; letter-spacing:8px; width:160px; padding:10px; border:1.5px solid #c9c4b8; border-radius:10px; background:#fff; }
+  #go { margin-top:14px; padding:10px 26px; font-size:15px; font-weight:600; background:#1f2328; color:#fff; border:0; border-radius:9px; }
+  #err { color:#b3261e; font-size:13px; height:16px; }
+  #loading { display:none; text-align:center; margin-top:120px; color:#6b7280; font-size:15px; }
 </style>
 </head>
 <body>
-<!-- IMPORTANT: replace the src below with YOUR band deployment URL (the "Anyone" one), keeping ?book=1 at the end -->
-<iframe src="https://script.google.com/a/macros/vivacreative.com/s/AKfycbwu5M91J-9x9w_UM_6qode8WBnVlkUiwP6sLeUBXUkM7drFBqi8BYuGq8NsN3tnON1U/exec?book=1" allow="clipboard-write" title="Jovi Greene Tour Book"></iframe>
+<div id="gate">
+  <img src="icon-192.png" width="72" height="72" style="border-radius:16px" alt="">
+  <h1>Jovi Greene — Tour</h1>
+  <div class="sub">Enter your PIN. Ask Lorne if you don't have it.</div>
+  <input id="pin" type="tel" inputmode="numeric" autocomplete="one-time-code" maxlength="8">
+  <div><button id="go">View</button></div>
+  <p id="err"></p>
+</div>
+<div id="loading"><div style="font-size:26px;margin-bottom:10px">&#127928;</div>Loading&hellip;</div>
+
+<script>
+// ================================================================
+// SET THIS: your BAND ("Anyone") Apps Script deployment /exec URL
+var EXEC = 'https://script.google.com/a/macros/vivacreative.com/s/AKfycbwu5M91J-9x9w_UM_6qode8WBnVlkUiwP6sLeUBXUkM7drFBqi8BYuGq8NsN3tnON1U/exec';
+// ================================================================
+
+var CUR = { t: 'book', v: '1' };
+var gate = document.getElementById('gate'), loading = document.getElementById('loading');
+
+// --- routing: read the URL hash (#show/<id>, #profile/<from>, #people) ---
+function routeFromHash() {
+  var h = location.hash.replace(/^#\/?/, '');
+  if (!h) return { t: 'book', v: '1' };
+  var parts = h.split('/');
+  var t = parts[0], v = parts[1] || '1';
+  if (['book', 'show', 'profile', 'people'].indexOf(t) === -1) return { t: 'book', v: '1' };
+  return { t: t, v: v.replace(/[^\w-]/g, '') };
+}
+function hashFor(t, v) { return t === 'book' ? '#book' : '#' + t + '/' + v; }
+
+var start = routeFromHash();
+CUR = { t: start.t, v: start.v };
+
+function ckey(t, v) { return 'jg_cache_' + t + '_' + v; }
+function stamp(t) { try { return new Date(t).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }); } catch (e) { return ''; } }
+function cacheGet(t, v) { try { var c = JSON.parse(localStorage.getItem(ckey(t, v)) || 'null'); return c && c.h ? c : null; } catch (e) { return null; } }
+function cacheSet(t, v, h) { try { localStorage.setItem(ckey(t, v), JSON.stringify({ t: Date.now(), h: h })); } catch (e) {} }
+function getPin() { try { return localStorage.getItem('jovi_pin') || ''; } catch (e) { return ''; } }
+
+function banner(txt, ok) {
+  var b = document.getElementById('jg_status');
+  if (!b) { b = document.createElement('div'); b.id = 'jg_status'; document.body.insertBefore(b, document.body.firstChild); }
+  b.style.cssText = 'position:sticky;top:0;z-index:9;text-align:center;font-size:12px;padding:6px 10px;cursor:pointer;' +
+    (ok ? 'background:#e6f4ea;color:#1a7f4f;border-bottom:1px solid #b7dfc5' : 'background:#fff8e1;color:#6b4a00;border-bottom:1px solid #e8d9a0');
+  b.textContent = txt + '  ↻';
+  b.onclick = function () { jgNav(CUR.t, CUR.v); };
+}
+
+// --- API ---
+function apiView(t, v, pin) {
+  var u = EXEC + '?api=view&t=' + encodeURIComponent(t) + '&v=' + encodeURIComponent(v) + '&pin=' + encodeURIComponent(pin);
+  return fetch(u).then(function (r) { return r.json(); });
+}
+function apiPost(payload) {
+  return fetch(EXEC, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify(payload) })
+    .then(function (r) { return r.json(); });
+}
+
+function render(html) { document.body.innerHTML = html; window.scrollTo(0, 0); }
+
+function badPin(msg) { return msg.indexOf('BAD_PIN') > -1 || msg.indexOf('LOCKED') > -1; }
+
+// --- first login through the gate ---
+function login(pin, silent) {
+  if (!silent && gate) { document.getElementById('err').textContent = ''; document.getElementById('go').textContent = 'Loading…'; }
+  apiView(CUR.t, CUR.v, pin).then(function (r) {
+    if (r.ok) {
+      try { localStorage.setItem('jovi_pin', pin); } catch (e) {}
+      cacheSet(CUR.t, CUR.v, r.html);
+      history.replaceState(null, '', hashFor(CUR.t, CUR.v));
+      render(r.html);
+      return;
+    }
+    var msg = String(r.error || '');
+    var gateEl = document.getElementById('gate');
+    if (badPin(msg)) {
+      try { localStorage.removeItem('jovi_pin'); localStorage.removeItem(ckey(CUR.t, CUR.v)); } catch (x) {}
+      if (gateEl) {
+        loading.style.display = 'none'; gateEl.style.display = 'block';
+        document.getElementById('go').textContent = 'View';
+        document.getElementById('err').textContent = msg.indexOf('LOCKED') > -1 ? 'Too many attempts — try again in 15 minutes.' : (silent ? 'Enter your PIN.' : 'Wrong PIN — try again.');
+      } else { location.reload(); }
+    } else { netFail(silent); }
+  }).catch(function () { netFail(silent); });
+}
+
+function netFail(silent) {
+  var c = cacheGet(CUR.t, CUR.v);
+  var gateEl = document.getElementById('gate');
+  if (c) { render(c.h); banner('Offline? Showing saved copy from ' + stamp(c.t) + '. Tap to retry.'); }
+  else if (gateEl) {
+    loading.style.display = 'none'; gateEl.style.display = 'block';
+    document.getElementById('go').textContent = 'View';
+    document.getElementById('err').textContent = 'Connection problem — try again.';
+  }
+}
+
+document.getElementById('go').onclick = function () { login(document.getElementById('pin').value, false); };
+document.getElementById('pin').addEventListener('keydown', function (ev) { if (ev.key === 'Enter') login(this.value, false); });
+
+// --- in-app navigation (called from onclick handlers inside the injected pages) ---
+window.jgNav = function (t, v) {
+  CUR = { t: t, v: String(v) };
+  if (location.hash !== hashFor(t, v)) history.pushState(null, '', hashFor(t, v));
+  var c = cacheGet(t, v);
+  if (c) { render(c.h); banner('Saved copy from ' + stamp(c.t) + ' — updating…'); }
+  else { document.body.innerHTML = '<div style="text-align:center;margin-top:110px;color:#6b7280"><div style="font-size:26px">🎸</div>Loading…</div>'; }
+  apiView(t, v, getPin()).then(function (r) {
+    if (r.ok) {
+      cacheSet(t, v, r.html);
+      if (CUR.t === t && CUR.v === String(v)) render(r.html);
+    } else if (badPin(String(r.error || ''))) {
+      try { localStorage.removeItem('jovi_pin'); } catch (x) {}
+      location.href = location.pathname; // back to the gate
+    } else if (c) { banner('Offline? Showing saved copy from ' + stamp(c.t) + '. Tap to retry.'); }
+    else { document.body.innerHTML = '<div style="text-align:center;margin-top:110px">Connection problem — <a href="#" onclick="jgNav(\'' + t + '\',\'' + String(v) + '\');return false">try again</a></div>'; }
+  }).catch(function () {
+    if (c) banner('Offline? Showing saved copy from ' + stamp(c.t) + '. Tap to retry.');
+    else document.body.innerHTML = '<div style="text-align:center;margin-top:110px">Connection problem — <a href="#" onclick="jgNav(\'' + t + '\',\'' + String(v) + '\');return false">try again</a></div>';
+  });
+};
+
+// phone/browser back button
+window.addEventListener('popstate', function () {
+  var r = routeFromHash();
+  if (r.t !== CUR.t || r.v !== CUR.v) {
+    CUR = r;
+    var c = cacheGet(r.t, r.v);
+    if (c) render(c.h);
+    jgNavRefresh();
+  }
+});
+function jgNavRefresh() {
+  var t = CUR.t, v = CUR.v;
+  apiView(t, v, getPin()).then(function (r) {
+    if (r.ok) { cacheSet(t, v, r.html); if (CUR.t === t && CUR.v === v) render(r.html); }
+  }).catch(function () {});
+}
+
+window.jgProfileBack = function () {
+  if (CUR.t === 'profile' && CUR.v && CUR.v !== 'book') jgNav('show', CUR.v);
+  else jgNav('book', '1');
+};
+
+// --- profile save (form fields carry data-k attributes) ---
+window.jgSaveProfile = function (b) {
+  var d = {};
+  document.querySelectorAll('[data-k]').forEach(function (el) {
+    if (el.dataset.k === 'passport_number' && !el.value.trim()) return;
+    d[el.dataset.k] = el.value;
+  });
+  var m = document.getElementById('msg');
+  b.disabled = true; b.textContent = 'Saving…'; if (m) m.textContent = '';
+  apiPost({ kind: 'pwa_profile_save', pin: getPin(), data: d }).then(function (r) {
+    if (!r.ok) throw new Error(r.error || 'save failed');
+    try { localStorage.removeItem(ckey(CUR.t, CUR.v)); } catch (x) {}
+    b.textContent = '✓ Saved — thank you!';
+    if (m) { m.style.color = '#1a7f4f'; m.textContent = 'Returning…'; }
+    setTimeout(function () { jgProfileBack(); }, 800);
+  }).catch(function () {
+    b.disabled = false; b.textContent = 'Save my profile';
+    if (m) { m.style.color = '#b3261e'; m.textContent = 'Could not save — try again or text Lorne.'; }
+  });
+};
+
+// --- guest list request ---
+window.jgSubmitGuest = function (b, sid) {
+  var n = document.getElementById('gr_n'), e = document.getElementById('gr_e'), p = document.getElementById('gr_p'), m = document.getElementById('gr_msg');
+  if (!n.value.trim()) { m.textContent = 'Please enter the guest name.'; m.style.color = '#b3261e'; return; }
+  b.disabled = true; b.textContent = 'Sending…'; m.textContent = '';
+  apiPost({ kind: 'pwa_guest_request', pin: getPin(), showId: sid, gname: n.value.trim(), gemail: e.value, gphone: p.value }).then(function (r) {
+    if (!r.ok) throw new Error(r.error || 'send failed');
+    m.textContent = '✓ Sent to Lorne: ' + n.value.trim(); m.style.color = '#1a7f4f';
+    n.value = ''; e.value = ''; p.value = '';
+    b.disabled = false; b.textContent = 'Send another guest';
+  }).catch(function () {
+    b.disabled = false; b.textContent = 'Send request';
+    m.textContent = 'Could not send — text Lorne instead.'; m.style.color = '#b3261e';
+  });
+};
+
+// --- boot: saved PIN? go straight in (cache first, then refresh) ---
+(function () {
+  var stored = getPin();
+  var cached = cacheGet(CUR.t, CUR.v);
+  if (stored && cached) {
+    render(cached.h);
+    banner('Saved copy from ' + stamp(cached.t) + ' — updating…');
+    login(stored, true);
+  } else if (stored) {
+    gate.style.display = 'none'; loading.style.display = 'block';
+    login(stored, true);
+  }
+})();
+
+// --- PWA install plumbing ---
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(function () {});
+</script>
 </body>
 </html>
