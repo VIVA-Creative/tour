@@ -1,6 +1,6 @@
 {
-  "name": "Jovi Greene Tour",
-  "short_name": "Jovi Tour",
+  "name": "Jovi TourBook",
+  "short_name": "Jovi TourBook",
   "description": "Day sheets, schedules, travel and contacts for the Jovi Greene touring party.",
   "start_url": "./",
   "scope": "./",
