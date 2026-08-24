@@ -17,6 +17,9 @@
     box-shadow:0 1px 4px rgba(0,0,0,.08);
   }
   #fallback a { color:#b4530a; }
+  #fallback.hide { opacity:0; pointer-events:none; }
+  #fallback { transition:opacity .6s; }
+  #fbx { margin-left:8px; cursor:pointer; color:#6b7280; font-weight:700; }
 </style>
 </head>
 <body>
@@ -24,6 +27,10 @@
      SET THIS: your EDITOR ("Anyone with Google account") /exec URL
      ================================================================ -->
 <iframe id="app" src="https://script.google.com/a/macros/vivacreative.com/s/AKfycbwKJUYyZge-27zKysH-IMXep0f3Sw_6jRpS6DqBks0AwWX8c6HI4Kwp0Kp0j6dk93gS/exec" allow="clipboard-write"></iframe>
-<div id="fallback">Blank page? <a href="https://script.google.com/a/macros/vivacreative.com/s/AKfycbwKJUYyZge-27zKysH-IMXep0f3Sw_6jRpS6DqBks0AwWX8c6HI4Kwp0Kp0j6dk93gS/exec" target="_blank" rel="noopener">Sign in to Google first</a>, then reload.</div>
+<div id="fallback">Blank page? <a href="https://script.google.com/a/macros/vivacreative.com/s/AKfycbwKJUYyZge-27zKysH-IMXep0f3Sw_6jRpS6DqBks0AwWX8c6HI4Kwp0Kp0j6dk93gS/exec" target="_blank" rel="noopener">Sign in to Google first</a>, then reload.<span id="fbx" onclick="document.getElementById('fallback').classList.add('hide')">✕</span></div>
+<script>
+  // The sign-in hint fades away after 12 seconds (we can't see into Google's frame to know if you're logged in)
+  setTimeout(function () { document.getElementById('fallback').classList.add('hide'); }, 12000);
+</script>
 </body>
 </html>
